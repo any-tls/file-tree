@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ファイルツリー作成</title>
+<style>
+:root{--bg:#f3f3f3;--panel:#fff;--line:#bdbdbd;--ink:#222;--muted:#666;--accent:#245a86;--soft:#e8eef3}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 Arial,"Meiryo",sans-serif}
+header{background:#e5e5e5;border-bottom:1px solid #aaa;padding:12px 18px}
+h1{font-size:20px;font-weight:600;margin:0}header p{margin:3px 0 0;color:#555;font-size:12px}
+main{max-width:1200px;margin:16px auto;padding:0 14px;display:grid;grid-template-columns:290px minmax(0,1fr);gap:14px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:2px;min-width:0}
+.panel h2{font-size:14px;margin:0;padding:9px 11px;background:#eee;border-bottom:1px solid var(--line);font-weight:600}
+.pad{padding:11px}.section{margin-bottom:15px}.section:last-child{margin-bottom:0}
+label{display:block;font-size:12px;color:#444;margin-bottom:4px}input[type="text"],input[type="number"],select,textarea{font:13px Arial,"Meiryo",sans-serif;border:1px solid #aaa;border-radius:2px;background:#fff;padding:6px;width:100%;color:#222}
+input[type="checkbox"]{vertical-align:middle;margin:0 5px 0 0} .check{display:flex;align-items:center;margin:7px 0;font-size:13px}
+button,.filebutton{font:13px Arial,"Meiryo",sans-serif;padding:7px 10px;border:1px solid #999;border-radius:2px;background:#f5f5f5;color:#222;cursor:pointer;display:inline-block;text-align:center}
+button:hover,.filebutton:hover{background:#e9e9e9}button.primary{background:#e4edf5;border-color:#8198ad;color:#173b59}button:disabled{opacity:.45;cursor:default}
+.btnrow{display:flex;gap:6px;flex-wrap:wrap}.btnrow>*{flex:1}
+.drop{border:1px dashed #999;background:#fafafa;text-align:center;padding:18px 10px;color:#555;min-height:96px}.drop.over{background:#e8f0f7;border-color:#245a86}
+.drop strong{display:block;font-size:14px;color:#333;margin-bottom:4px}.small{font-size:11px;color:#666}.status{padding:7px 9px;background:#f7f7f7;border:1px solid #ddd;font-size:12px;margin-top:9px;white-space:pre-wrap}
+.toolbar{padding:9px;border-bottom:1px solid #ccc;display:flex;gap:6px;flex-wrap:wrap;align-items:center}.toolbar button{padding:5px 8px}.toolbar .spacer{flex:1}
+.preview{padding:14px;min-height:400px;overflow:auto;background:#fff}
+.tree{font:13px/1.7 Consolas,"Courier New",monospace;white-space:pre;min-width:max-content}
+.tree .folder{font-weight:bold}.empty{color:#777;text-align:center;padding:55px 15px}
+.output{margin-top:12px}.output textarea{height:125px;resize:vertical;font:12px/1.5 Consolas,monospace}
+footer{max-width:1200px;margin:0 auto;padding:0 14px 18px;color:#666;font-size:11px}
+.hidden{display:none!important}.inline{display:flex;gap:7px;align-items:center}.inline input{flex:1}.inline span{font-size:12px}
+@media(max-width:760px){main{grid-template-columns:1fr}.preview{min-height:260px}header{padding:11px 14px}}
+</style>
+</head>
+<body>
+<header><h1>ファイルツリー作成</h1><p>フォルダ構成をテキスト・画像に変換します。処理はブラウザ内で行います。</p></header>
+<main>
+<aside class="panel">
+<h2>読み込み</h2><div class="pad">
+<div class="section">
+<div class="btnrow">
+<label class="filebutton">フォルダを選択<input id="folderInput" type="file" webkitdirectory multiple class="hidden"></label>
+<label class="filebutton">ZIPを選択<input id="zipInput" type="file" accept=".zip,application/zip" class="hidden"></label>
+</div>
+</div>
+<div id="drop" class="drop"><strong>ここにフォルダまたはZIPをドロップ</strong>フォルダ内のファイルをまとめてドロップしても読み込めます。<div class="small">フォルダのドラッグ＆ドロップはブラウザにより対応状況が異なります。</div></div>
+<div id="status" class="status">ファイルまたはフォルダを選択してください。</div>
+</div>
+<h2>表示設定</h2><div class="pad">
+<div class="section"><label for="rootName">ルート名</label><input id="rootName" type="text" value="project"></div>
+<div class="section"><label for="sort">並び順</label><select id="sort"><option value="folders">フォルダを先に表示</option><option value="name">名前順</option><option value="original">読み込み順</option></select></div>
+<div class="section"><label for="depth">表示する階層（0＝すべて）</label><input id="depth" type="number" min="0" max="99" value="0"></div>
+<div class="section"><label for="indent">インデント文字</label><select id="indent"><option value="    ">スペース4個</option><option value="  ">スペース2個</option><option value="│   ">罫線あり</option><option value="tab">タブ</option></select></div>
+<div class="section">
+<label>表示オプション</label>
+<label class="check"><input id="showFiles" type="checkbox" checked>ファイルを表示</label>
+<label class="check"><input id="showFolders" type="checkbox" checked>フォルダを表示</label>
+<label class="check"><input id="showExt" type="checkbox" checked>ファイル名・拡張子を表示</label>
+<label class="check"><input id="showHidden" type="checkbox">隠しファイルを表示</label>
+<label class="check"><input id="showSize" type="checkbox">ファイルサイズを表示</label>
+<label class="check"><input id="showCount" type="checkbox">フォルダ内の件数を表示</label>
+<label class="check"><input id="guides" type="checkbox" checked>ツリーの接続線を表示</label>
+</div>
+<div class="section btnrow"><button id="expandAll">すべて展開</button><button id="collapseAll">すべて折りたたむ</button></div>
+<div class="section"><label class="check"><input id="collapseState" type="checkbox">フォルダを折りたたんだ状態で出力</label><div class="small">プレビューのフォルダ名をクリックすると展開・折りたたみできます。</div></div>
+</div>
+</aside>
+<section class="panel">
+<h2>プレビュー</h2>
+<div class="toolbar"><button id="copyBtn" class="primary">テキストをコピー</button><button id="downloadTxt">TXT保存</button><button id="downloadPng">PNG画像保存</button><button id="refresh">更新</button><span class="spacer"></span><span id="summary" class="small">0 files</span></div>
+<div id="preview" class="preview"><div class="empty">読み込んだフォルダの構成がここに表示されます。</div></div>
+<div class="pad output"><label for="textOutput">テキスト出力（AIのプロンプトに貼り付けて使用できます）</label><textarea id="textOutput" spellcheck="false" placeholder="ファイルツリーがここに生成されます。"></textarea><div class="btnrow" style="margin-top:7px"><button id="selectText">テキストを全選択</button><button id="clearBtn">クリア</button></div></div>
+</section>
+</main>
+<footer>※ ブラウザの仕様上、フォルダの読み込みにはフォルダ選択または対応ブラウザでのドラッグ＆ドロップを使用してください。ZIPは一般的な非暗号化ZIP（保存・Deflate方式）に対応します。</footer>
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const state = {root:{name:'project',type:'dir',children:[]}, loaded:false, collapsed:new Set(), original:0};
+const status = msg => $('status').textContent = msg;
+const fmtSize = n => n < 1024 ? n+' B' : n < 1048576 ? (n/1024).toFixed(1)+' KB' : (n/1048576).toFixed(1)+' MB';
+function newDir(name){return {name,type:'dir',children:[],size:0,id:Math.random().toString(36).slice(2)}}
+function addPath(path, size=0, isDir=false){
+ path=path.replace(/\\/g,'/').replace(/^\/+|\/+$/g,''); if(!path)return;
+ const parts=path.split('/').filter(Boolean); let cur=state.root;
+ for(let i=0;i<parts.length;i++){
+  const name=parts[i]; let node=cur.children.find(n=>n.name===name && n.type===(i===parts.length-1&&!isDir?'file':'dir'));
+  if(!node){node=i===parts.length-1&&!isDir?{name,type:'file',size,id:Math.random().toString(36).slice(2)}:newDir(name);cur.children.push(node)}
+  if(i===parts.length-1&&!isDir){node.size=size}
+  else {cur=node}
+ }
+}
+function reset(name){state.root=newDir(name||'project');state.collapsed.clear();state.original=0}
+async function loadFiles(files, rootName){
+ reset(rootName||'project');
+ const list=Array.from(files);
+ const folderRoot = list.length && list[0].webkitRelativePath ? list[0].webkitRelativePath.split('/')[0] : '';
+ for(const f of list){let path=f.webkitRelativePath||f.name;if(folderRoot && path.startsWith(folderRoot+'/')) path=path.slice(folderRoot.length+1);addPath(path,f.size,false)}
+ state.loaded=true; render();status(`読み込み完了：${list.length} ファイル\nフォルダ構成を生成しました。`);
+}
+function sortChildren(node){
+ let arr=[...(node.children||[])], mode=$('sort').value;
+ if(mode==='folders')arr.sort((a,b)=>(a.type==='dir'?0:1)-(b.type==='dir'?0:1)||a.name.localeCompare(b.name,'ja'));
+ else if(mode==='name')arr.sort((a,b)=>a.name.localeCompare(b.name,'ja'));
+ return arr;
+}
+function visibleChildren(node){return sortChildren(node).filter(n=>($('showFiles').checked||n.type==='dir')&&($('showFolders').checked||n.type==='file')&&($('showHidden').checked||!n.name.startsWith('.')))}
+function countFiles(node){let n=0;for(const c of node.children||[])n+=c.type==='file'?1:countFiles(c);return n}
+function countDirs(node){let n=0;for(const c of node.children||[])n+=c.type==='dir'?1+countDirs(c):0;return n}
+function makeLines(){
+ if(!state.loaded)return [];
+ const rootName=$('rootName').value.trim()||'project', maxDepth=Math.max(0,parseInt($('depth').value)||0);
+ const out=[rootName], indent=$('indent').value, guides=$('guides').checked;
+ function walk(node,prefix,depth){
+  if(maxDepth>0&&depth>=maxDepth)return;
+  if(state.collapsed.has(node.id))return;
+  const kids=visibleChildren(node);
+  kids.forEach((child,i)=>{
+   const last=i===kids.length-1, branch=guides?(last?'└── ':'├── '):'';
+   let name=child.name;
+   if(child.type==='file'&&!$('showExt').checked)name=name.replace(/\.[^.]+$/,'');
+   if(child.type==='dir'&&$('showCount').checked)name+=` (${countFiles(child)} files)`;
+   if(child.type==='file'&&$('showSize').checked)name+=` (${fmtSize(child.size)})`;
+   out.push(prefix+branch+(child.type==='dir'?'📁 ':'')+name);
+   if(child.type==='dir'&&!state.collapsed.has(child.id))walk(child,prefix+(guides?(last?'    ':'│   '):indent),depth+1);
+  });
+ }
+ walk(state.root,'',0);return out;
+}
+function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function render(){
+ if(!state.loaded){$('preview').innerHTML='<div class="empty">読み込んだフォルダの構成がここに表示されます。</div>';$('textOutput').value='';$('summary').textContent='0 files';return}
+ const rootName=$('rootName').value.trim()||'project';
+ const maxDepth=Math.max(0,parseInt($('depth').value)||0), lines=[];
+ function walk(node,depth,prefix,last,root=false){
+  if(!root && maxDepth>0&&depth>maxDepth)return;
+  const name=root?rootName:node.name;
+  let label=name;
+  if(!root&&node.type==='file'&&!$('showExt').checked)label=label.replace(/\.[^.]+$/,'');
+  if(!root&&node.type==='file'&&$('showSize').checked)label+=` (${fmtSize(node.size)})`;
+  if(!root&&node.type==='dir'&&$('showCount').checked)label+=` (${countFiles(node)} files)`;
+  const branch=root?'':($('guides').checked?(last?'└── ':'├── '):'');
+  const icon=root?'':(node.type==='dir'?'📁 ':'');
+  lines.push({node,depth,prefix,branch,icon,label,root});
+  if(!root&&node.type!=='dir')return;
+  if(!root&&state.collapsed.has(node.id))return;
+  if(!root&&maxDepth>0&&depth>=maxDepth)return;
+  const kids=visibleChildren(node);
+  kids.forEach((c,i)=>walk(c,depth+1,prefix+($('guides').checked?(i===kids.length-1?'    ':'│   '):$('indent').value),i===kids.length-1,false));
+ }
+ walk(state.root,0,'',true,true);
+ $('preview').innerHTML='';
+ const tree=document.createElement('div');tree.className='tree';
+ for(const item of lines){
+  const row=document.createElement('div');row.style.paddingLeft=(item.depth*0)+'px';
+  row.textContent=item.prefix+item.branch+item.icon+item.label;
+  if(item.node.type==='dir'&&!item.root){row.classList.add('folder');row.style.cursor='pointer';row.title='クリックして展開・折りたたみ';row.addEventListener('click',()=>{if(state.collapsed.has(item.node.id))state.collapsed.delete(item.node.id);else state.collapsed.add(item.node.id);render()})}
+  tree.appendChild(row);
+ }
+ $('preview').appendChild(tree);
+ $('textOutput').value=makeLines().join('\n');
+ $('summary').textContent=`${countFiles(state.root)} files / ${countDirs(state.root)} folders`;
+}
+async function readEntry(entry, prefix=''){
+ return new Promise(resolve=>{
+  if(entry.isFile)entry.file(f=>{addPath(prefix+f.name,f.size);resolve()},()=>resolve());
+  else if(entry.isDirectory){const reader=entry.createReader();const all=[];const next=()=>reader.readEntries(async entries=>{if(!entries.length){for(const e of all)await readEntry(e,prefix+entry.name+'/');resolve()}else{all.push(...entries);next()}},()=>resolve());next()}
+ });
+}
+async function processDrop(dt){
+ const items=Array.from(dt.items||[]), entries=items.map(i=>i.webkitGetAsEntry&&i.webkitGetAsEntry()).filter(Boolean);
+ if(entries.some(e=>e.isDirectory)){
+  reset('project');for(const e of entries)await readEntry(e,'');state.loaded=true;render();status('フォルダの読み込みが完了しました。');return;
+ }
+ const files=Array.from(dt.files||[]);if(!files.length)return;
+ const zip=files.find(f=>/\.zip$/i.test(f.name));
+ if(zip){await loadZip(zip);return}
+ await loadFiles(files,'project');
+}
+async function loadZip(file){
+ try{
+  status('ZIPを展開しています…');reset(file.name.replace(/\.zip$/i,'')||'project');
+  const buf=await file.arrayBuffer(), dv=new DataView(buf), bytes=new Uint8Array(buf);
+  let eocd=-1;for(let i=bytes.length-22;i>=Math.max(0,bytes.length-65557);i--){if(dv.getUint32(i,true)===0x06054b50){eocd=i;break}}
+  if(eocd<0)throw Error('ZIPの終端情報が見つかりません。');
+  const count=dv.getUint16(eocd+10,true), cdOffset=dv.getUint32(eocd+16,true);let p=cdOffset, done=0;
+  for(let i=0;i<count;i++){
+   if(dv.getUint32(p,true)!==0x02014b50)throw Error('ZIPの構造を読み取れません。');
+   const method=dv.getUint16(p+10,true), size=dv.getUint32(p+20,true), nameLen=dv.getUint16(p+28,true), extraLen=dv.getUint16(p+30,true), commentLen=dv.getUint16(p+32,true), localOff=dv.getUint32(p+42,true);
+   const name=new TextDecoder().decode(bytes.slice(p+46,p+46+nameLen));p+=46+nameLen+extraLen+commentLen;
+   if(!name||name.endsWith('/')){if(name)addPath(name,0,true);continue}
+   addPath(name,size,false);done++;
+  }
+  state.loaded=true;render();status(`ZIP読み込み完了：${done} ファイル\n※ ZIP内のファイル内容は展開せず、一覧情報から構成を生成しました。`);
+ }catch(e){status('ZIPを読み込めませんでした：'+e.message)}
+}
+function download(name,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+$('folderInput').addEventListener('change',e=>{if(e.target.files.length)loadFiles(e.target.files,e.target.files[0].webkitRelativePath?.split('/')[0]||'project');e.target.value=''});
+$('zipInput').addEventListener('change',e=>{if(e.target.files[0])loadZip(e.target.files[0]);e.target.value=''});
+const drop=$('drop');['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over')}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over')}));
+drop.addEventListener('drop',e=>processDrop(e.dataTransfer));
+document.addEventListener('dragover',e=>e.preventDefault());document.addEventListener('drop',e=>{if(!drop.contains(e.target)){e.preventDefault();processDrop(e.dataTransfer)}});
+['rootName','sort','depth','indent','showFiles','showFolders','showExt','showHidden','showSize','showCount','guides','collapseState'].forEach(id=>$(id).addEventListener('change',()=>{
+ if(id==='collapseState'&&state.loaded){if($('collapseState').checked){const all=[];function walk(n){(n.children||[]).forEach(c=>{if(c.type==='dir'){all.push(c.id);walk(c)}})}walk(state.root);state.collapsed=new Set(all)}else state.collapsed.clear()}
+ render();
+}));
+$('expandAll').onclick=()=>{state.collapsed.clear();$('collapseState').checked=false;render()};
+$('collapseAll').onclick=()=>{const all=[];function walk(n){(n.children||[]).forEach(c=>{if(c.type==='dir'){all.push(c.id);walk(c)}})}walk(state.root);state.collapsed=new Set(all);$('collapseState').checked=true;render()};
+$('refresh').onclick=render;
+$('clearBtn').onclick=()=>{state.loaded=false;state.root=newDir('project');state.collapsed.clear();render();status('クリアしました。')};
+$('selectText').onclick=()=>{$('textOutput').focus();$('textOutput').select()};
+$('copyBtn').onclick=async()=>{try{await navigator.clipboard.writeText($('textOutput').value);status('テキストをコピーしました。')}catch(e){$('textOutput').focus();$('textOutput').select();status('テキストを選択しました。Ctrl+C / コピーでコピーしてください。')}};
+$('downloadTxt').onclick=()=>download('file-tree.txt',new Blob([$('textOutput').value],{type:'text/plain;charset=utf-8'}));
+$('downloadPng').onclick=()=>{
+ if(!state.loaded){status('先にフォルダまたはZIPを読み込んでください。');return}
+ const lines=$('textOutput').value.split('\n'), font=14, lineH=22, pad=24;
+ const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');ctx.font=`${font}px Consolas, "Courier New", monospace`;
+ const width=Math.min(5000,Math.max(600,...lines.map(l=>ctx.measureText(l).width))+pad*2),height=Math.min(20000,lines.length*lineH+pad*2);
+ canvas.width=width*2;canvas.height=height*2;ctx.scale(2,2);ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height);ctx.fillStyle='#222';ctx.font=`${font}px Consolas, "Courier New", monospace`;ctx.textBaseline='top';
+ lines.forEach((l,i)=>{if(i*lineH+pad<height-lineH)ctx.fillText(l,pad,pad+i*lineH)});
+ canvas.toBlob(blob=>{if(blob)download('file-tree.png',blob);else status('画像を生成できませんでした。')},'image/png');
+};
+})();
+</script>
+</body></html>
